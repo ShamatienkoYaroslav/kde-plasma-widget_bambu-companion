@@ -18,11 +18,15 @@ jobs:
             gcc-c++ \
             cmake \
             git \
+            pkgconf-pkg-config \
             extra-cmake-modules \
             qt6-qtbase-devel \
             qt6-qtdeclarative-devel \
             kf6-kcoreaddons-devel \
-            kf6-kpackage-devel
+            kf6-kpackage-devel \
+            kf6-kwallet-devel \
+            kf6-kconfig-devel \
+            mosquitto-devel
 
       - name: Checkout
         uses: actions/checkout@v4
