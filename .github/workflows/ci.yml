@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build & test (Fedora)
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            gcc-c++ \
+            cmake \
+            git \
+            extra-cmake-modules \
+            qt6-qtbase-devel \
+            qt6-qtdeclarative-devel \
+            kf6-kcoreaddons-devel \
+            kf6-kpackage-devel
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --output-on-failure --test-dir build

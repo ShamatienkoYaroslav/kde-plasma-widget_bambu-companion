@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Yaroslav Shametienko",
+                "Email": "shamatienko.yaroslav@gmail.com"
+            }
+        ],
+        "Description": "Monitor and control your Bambu Lab 3D printers from the system tray",
+        "Icon": "printer",
+        "Id": "io.github.shamatienkoyaroslav.bambucompanion",
+        "Name": "Bambu Companion",
+        "Version": "0.1.0"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationAreaCategory": "Hardware"
+}

@@ -72,12 +72,20 @@ ctest --output-on-failure --test-dir build
 ```
 
 Manual UI testing (unit tests can't exercise Plasma shell integration or real
-printers):
+printers). Two separate install steps are needed — `kpackagetool6` only
+installs the declarative `package/` content; the compiled QML plugin
+(`bambucompanionplugin`) needs a regular CMake install into Qt's system QML
+import path, which typically requires root:
 
 ```sh
-kpackagetool6 --type Plasma/Applet -i package   # first install
-kpackagetool6 --type Plasma/Applet -u package   # after changes
+sudo cmake --install build                      # installs the compiled QML plugin
+kpackagetool6 --type Plasma/Applet -i package    # first install of the KPackage
+kpackagetool6 --type Plasma/Applet -u package    # after changes to package/
 ```
+
+After the first `sudo cmake --install build`, only `cmake --build build` +
+`sudo cmake --install build` are needed when the plugin's C++ changes; only
+`kpackagetool6 -u package` is needed when only `package/contents` changes.
 
 Then add the widget from Plasma's "Add Widgets" dialog / system tray settings.
 
