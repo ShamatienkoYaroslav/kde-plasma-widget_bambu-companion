@@ -2,18 +2,25 @@
 
 #include <QAbstractListModel>
 #include <QList>
-#include <QString>
+#include <QUuid>
+#include <QVariantMap>
 #include <qqmlregistration.h>
 
 class PrinterListModel : public QAbstractListModel
 {
     Q_OBJECT
     QML_ELEMENT
+    QML_SINGLETON
 
 public:
     enum Role {
-        NameRole = Qt::UserRole + 1,
-        StatusRole,
+        IdRole = Qt::UserRole + 1,
+        NameRole,
+        StateRole,
+        ProgressRole,
+        NozzleTempRole,
+        BedTempRole,
+        ConnectionStateRole,
     };
 
     explicit PrinterListModel(QObject *parent = nullptr);
@@ -22,11 +29,13 @@ public:
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-private:
-    struct PrinterEntry {
-        QString name;
-        QString status;
-    };
+    // Full status for a single printer, for PrinterDetailView.qml (a ListView
+    // delegate only sees the roles above; this covers the rest).
+    Q_INVOKABLE QVariantMap printerDetails(const QString &printerId) const;
 
-    QList<PrinterEntry> m_printers;
+private:
+    void reload();
+    int rowForId(const QUuid &id) const;
+
+    QList<QUuid> m_order;
 };

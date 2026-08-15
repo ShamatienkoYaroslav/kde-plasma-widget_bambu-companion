@@ -153,34 +153,34 @@ Goal: add a real LAN printer manually, see its live status (state, progress,
 temps, fans, speed, WiFi signal, layer/Z) in the tray popup. No control
 commands yet, no cloud.
 
-- [ ] `src/core/PrinterProfile`, `PrinterStatus`, `PrinterConnection`
+- [x] `src/core/PrinterProfile`, `PrinterStatus`, `PrinterConnection`
       (abstract interface — include the `virtual CameraSource*
       cameraSource() { return nullptr; }` extension point now, implemented in
       Phase 4), `PrinterRegistry` (LAN-only for now), `ConnectionFactory`
       (returns `LanPrinterConnection` only for now).
-- [ ] `src/transport/lan/MqttClient` — libmosquitto wrapper: TLS connect
+- [x] `src/transport/lan/MqttClient` — libmosquitto wrapper: TLS connect
       (`mosquitto_tls_insecure_set`, since printer certs are self-signed and
       already TOFU-pinned by our own probe), subscribe/publish helpers, Qt
       signals (`connected()`, `disconnected(reason)`, `messageReceived(QByteArray)`).
-- [ ] `src/security/CertificateProbe` (QSslSocket-based TLS handshake to read
+- [x] `src/security/CertificateProbe` (QSslSocket-based TLS handshake to read
       the peer cert and compute its SHA-256 fingerprint) and
       `CertificateTrustStore` (persisted pinned fingerprints, KConfig-backed).
       Wire the TOFU flow before the first real MQTT connect to a given printer.
-- [ ] `src/protocol/BambuReportParser` (JSON report → `PrinterStatus`,
+- [x] `src/protocol/BambuReportParser` (JSON report → `PrinterStatus`,
       handling both full and delta/partial reports by merging into existing
       state) and `BambuCommandBuilder::pushAll()`.
-- [ ] `src/transport/lan/LanPrinterConnection` — owns an `MqttClient`,
+- [x] `src/transport/lan/LanPrinterConnection` — owns an `MqttClient`,
       publishes `pushall` on connect, parses incoming messages, emits
       `statusUpdated`.
-- [ ] `src/security/SecretStore` (KWallet) for the LAN access code.
-- [ ] `src/qmlplugin/PrinterListModel` (real, backed by `PrinterRegistry`),
+- [x] `src/security/SecretStore` (KWallet) for the LAN access code.
+- [x] `src/qmlplugin/PrinterListModel` (real, backed by `PrinterRegistry`),
       `PrinterController` (`Q_INVOKABLE addLanPrinter(host, serial,
       accessCode, mqttPort)`).
-- [ ] `package/contents/ui/FullRepresentation.qml`, `PrinterListItem.qml`,
+- [x] `package/contents/ui/FullRepresentation.qml`, `PrinterListItem.qml`,
       `PrinterDetailView.qml`, `AddPrinterDialog.qml` (LAN fields only),
       `CertificateConfirmDialog.qml` (TOFU fingerprint confirmation UX,
       modeled on SSH host-key prompts).
-- [ ] `package/contents/config/ConfigPrinters.qml`, `config/main.xml`
+- [x] `package/contents/config/ConfigPrinters.qml`, `config/main.xml`
       (global settings only at this point).
 
 Verify: unit tests for `BambuReportParser` against fixture JSON (captured
@@ -189,6 +189,9 @@ including delta-merge behavior; unit tests for `CertificateTrustStore`
 accept/mismatch logic; manual test against a real printer in a live Plasma
 session — add it, confirm the TOFU dialog appears once, see live status
 updates, verify reconnect after a printer reboot.
+
+Archived as OpenSpec change
+[`2026-08-15-phase-1-lan-monitoring-mvp`](./openspec/changes/archive/2026-08-15-phase-1-lan-monitoring-mvp/).
 
 ## Phase 2 — LAN control commands
 

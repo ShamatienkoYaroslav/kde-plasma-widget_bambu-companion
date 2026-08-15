@@ -49,13 +49,21 @@ crash or error even before any printer data exists.
 - **THEN** the compact representation renders an icon with no errors or
   warnings in Plasma's log
 
-### Requirement: Full representation renders placeholder printer list content
+### Requirement: Full representation renders live printer list content
 The system SHALL render a full (popup) representation that displays list
-content sourced from the printer list data model, showing placeholder entries
-when no real printer connection exists yet.
+content sourced from the printer list data model: each configured printer's
+live status when at least one printer is configured, or a prompt to add a
+printer when none are configured yet. The full representation SHALL NOT
+display hardcoded placeholder/dummy printer data.
 
-#### Scenario: Opening the popup with placeholder data
-- **WHEN** the user clicks the tray icon to open the full representation
-- **THEN** the popup opens and displays the placeholder printer list entries
-  provided by the underlying data model, with no errors or warnings in
-  Plasma's log
+#### Scenario: Opening the popup with configured printers
+- **WHEN** the user clicks the tray icon to open the full representation and
+  at least one printer has been added
+- **THEN** the popup opens and displays each configured printer's current
+  live status, with no errors or warnings in Plasma's log
+
+#### Scenario: Opening the popup with no printers configured
+- **WHEN** the user clicks the tray icon to open the full representation and
+  no printers have been added
+- **THEN** the popup opens and displays a prompt inviting the user to add a
+  printer, with no errors or warnings in Plasma's log

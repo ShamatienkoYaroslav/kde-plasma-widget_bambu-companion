@@ -15,8 +15,11 @@ include(ECMQmlModule)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Qml Quick)
-find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS CoreAddons Package)
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Network Qml Quick)
+find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS CoreAddons Package Wallet Config)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MOSQUITTO REQUIRED IMPORTED_TARGET libmosquitto)
 
 enable_testing()
 
