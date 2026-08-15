@@ -38,4 +38,6 @@ jobs:
         run: cmake --build build
 
       - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: ctest --output-on-failure --test-dir build
