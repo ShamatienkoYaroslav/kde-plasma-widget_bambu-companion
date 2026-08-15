@@ -9,6 +9,7 @@
 #include "../../security/CertificateTrustStore.h"
 #include "../../security/SecretStore.h"
 #include "MqttClient.h"
+#include "PendingCommandTracker.h"
 
 namespace
 {
@@ -21,6 +22,8 @@ QString requestTopic(const QString &serial)
 {
     return QStringLiteral("device/%1/request").arg(serial);
 }
+
+constexpr int kCommandTimeoutMs = 10000;
 }
 
 LanPrinterConnection::LanPrinterConnection(const PrinterProfile &profile, QObject *parent)
@@ -28,7 +31,10 @@ LanPrinterConnection::LanPrinterConnection(const PrinterProfile &profile, QObjec
     , m_profile(profile)
     , m_mqttClient(new MqttClient(this))
     , m_certificateProbe(new CertificateProbe(this))
+    , m_commandTracker(new PendingCommandTracker(this))
 {
+    connect(m_commandTracker, &PendingCommandTracker::acked, this, &PrinterConnection::commandAcked);
+
     connect(m_mqttClient, &MqttClient::connected, this, [this]() {
         setState(ConnectionState::Connected);
         m_mqttClient->subscribe(reportTopic(m_profile.serial));
@@ -116,8 +122,52 @@ void LanPrinterConnection::handleMessage(const QString &topic, const QByteArray 
     if (!doc.isObject()) {
         return;
     }
-    m_status = BambuReportParser::merge(m_status, doc.object());
+
+    const QJsonObject root = doc.object();
+    const QJsonObject print = root.value(QStringLiteral("print")).toObject();
+    const QString sequenceId = print.value(QStringLiteral("sequence_id")).toString();
+    if (!sequenceId.isEmpty()) {
+        // The community-documented protocol indicates the printer echoes the
+        // command's sequence_id back with a "result" field; a matching
+        // sequence_id with no explicit failure marker is treated as success
+        // (see design.md's Risks section — this is a best-effort assumption,
+        // pending confirmation against real hardware). resolve() is a no-op
+        // if this sequence_id isn't actually pending (e.g. it's "0" from our
+        // own pushall request).
+        const QString result = print.value(QStringLiteral("result")).toString();
+        const bool success = result.isEmpty() || result.compare(QStringLiteral("success"), Qt::CaseInsensitive) == 0;
+        const QString reason = print.value(QStringLiteral("reason")).toString();
+        m_commandTracker->resolve(sequenceId, success, reason);
+    }
+
+    m_status = BambuReportParser::merge(m_status, root);
     Q_EMIT statusUpdated(m_status);
+}
+
+QString LanPrinterConnection::sendCommand(const PrinterCommand &command)
+{
+    const QString sequenceId = QString::number(m_nextSequenceId++);
+
+    QByteArray payload;
+    switch (command.type) {
+    case PrinterCommand::Type::Pause:
+        payload = BambuCommandBuilder::pause(sequenceId);
+        break;
+    case PrinterCommand::Type::Resume:
+        payload = BambuCommandBuilder::resume(sequenceId);
+        break;
+    case PrinterCommand::Type::Stop:
+        payload = BambuCommandBuilder::stop(sequenceId);
+        break;
+    case PrinterCommand::Type::SkipObjects:
+        payload = BambuCommandBuilder::skipObjects(sequenceId, command.objectIds);
+        break;
+    }
+
+    m_commandTracker->track(sequenceId, kCommandTimeoutMs);
+    m_mqttClient->publish(requestTopic(m_profile.serial), payload);
+
+    return sequenceId;
 }
 
 PrinterConnection::ConnectionState LanPrinterConnection::connectionState() const

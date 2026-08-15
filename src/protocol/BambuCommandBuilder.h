@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QByteArray>
+#include <QList>
+#include <QString>
 
 class BambuCommandBuilder
 {
@@ -9,4 +11,9 @@ public:
     // printers stream delta reports afterward, so polling this is unnecessary
     // and discouraged by the community-documented protocol).
     static QByteArray pushAll();
+
+    static QByteArray pause(const QString &sequenceId);
+    static QByteArray resume(const QString &sequenceId);
+    static QByteArray stop(const QString &sequenceId);
+    static QByteArray skipObjects(const QString &sequenceId, const QList<int> &objectIds);
 };

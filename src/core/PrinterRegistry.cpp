@@ -125,6 +125,12 @@ void PrinterRegistry::startConnection(const PrinterProfile &profile)
         Q_EMIT certificateTrustNeeded(id, fingerprint);
     });
 
+    connect(connection, &PrinterConnection::commandAcked, this, [this, id](const QString &, bool success, const QString &reason) {
+        if (!success) {
+            Q_EMIT commandFailed(id, reason);
+        }
+    });
+
     connection->start();
 }
 
@@ -155,5 +161,12 @@ void PrinterRegistry::confirmCertificateTrust(const QUuid &id, const QString &fi
 {
     if (auto *connection = m_connections.value(id)) {
         connection->confirmCertificateTrust(fingerprint, accept);
+    }
+}
+
+void PrinterRegistry::sendCommand(const QUuid &id, const PrinterCommand &command)
+{
+    if (auto *connection = m_connections.value(id)) {
+        connection->sendCommand(command);
     }
 }

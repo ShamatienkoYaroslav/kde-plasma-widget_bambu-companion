@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 
+#include "PrinterCommand.h"
 #include "PrinterStatus.h"
 
 class CameraSource; // Extension point implemented in Phase 4.
@@ -30,6 +31,10 @@ public:
     virtual ConnectionState connectionState() const = 0;
     virtual PrinterStatus status() const = 0;
 
+    // Sends a print control command and returns the sequence id it was sent
+    // with, so the caller can correlate a later commandAcked() emission.
+    virtual QString sendCommand(const PrinterCommand &command) = 0;
+
     // LAN-specific trust-on-first-use flow; no-op for transports (e.g. Cloud)
     // that don't need certificate pinning.
     virtual void confirmCertificateTrust(const QString &fingerprint, bool accept)
@@ -49,4 +54,5 @@ Q_SIGNALS:
     void connectionStateChanged(ConnectionState state);
     void statusUpdated(const PrinterStatus &status);
     void certificateTrustNeeded(const QString &fingerprint);
+    void commandAcked(const QString &sequenceId, bool success, const QString &reason);
 };

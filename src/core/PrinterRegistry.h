@@ -25,6 +25,7 @@ public:
     PrinterConnection::ConnectionState connectionState(const QUuid &id) const;
 
     void confirmCertificateTrust(const QUuid &id, const QString &fingerprint, bool accept);
+    void sendCommand(const QUuid &id, const PrinterCommand &command);
 
 Q_SIGNALS:
     void printerAdded(const QUuid &id);
@@ -32,6 +33,7 @@ Q_SIGNALS:
     void printerStatusChanged(const QUuid &id);
     void printerConnectionStateChanged(const QUuid &id);
     void certificateTrustNeeded(const QUuid &id, const QString &fingerprint);
+    void commandFailed(const QUuid &id, const QString &reason);
 
 private:
     explicit PrinterRegistry(QObject *parent = nullptr);

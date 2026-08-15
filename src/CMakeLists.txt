@@ -7,6 +7,7 @@ add_library(bambucompanioncore STATIC
     core/PrinterStatus.h
     core/PrinterStatus.cpp
     core/PrinterConnection.h
+    core/PrinterCommand.h
     core/ConnectionFactory.h
     core/ConnectionFactory.cpp
     core/PrinterRegistry.h
@@ -25,6 +26,8 @@ add_library(bambucompanioncore STATIC
     transport/lan/MqttClient.cpp
     transport/lan/LanPrinterConnection.h
     transport/lan/LanPrinterConnection.cpp
+    transport/lan/PendingCommandTracker.h
+    transport/lan/PendingCommandTracker.cpp
 )
 
 target_include_directories(bambucompanioncore PUBLIC

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QList>
 #include <QObject>
 #include <QString>
 #include <qqmlregistration.h>
@@ -17,6 +18,12 @@ public:
     Q_INVOKABLE void removePrinter(const QString &printerId);
     Q_INVOKABLE void confirmCertificateTrust(const QString &printerId, const QString &fingerprint, bool accept);
 
+    Q_INVOKABLE void pause(const QString &printerId);
+    Q_INVOKABLE void resume(const QString &printerId);
+    Q_INVOKABLE void stop(const QString &printerId);
+    Q_INVOKABLE void skipObjects(const QString &printerId, const QList<int> &objectIds);
+
 Q_SIGNALS:
     void certificateTrustNeeded(const QString &printerId, const QString &printerName, const QString &fingerprint);
+    void commandFailed(const QString &printerId, const QString &reason);
 };

@@ -31,3 +31,13 @@ ecm_add_test(printerregistrytest.cpp
     TEST_NAME printerregistrytest
     LINK_LIBRARIES Qt::Test bambucompanioncore
 )
+
+ecm_add_test(bambucommandbuildertest.cpp
+    TEST_NAME bambucommandbuildertest
+    LINK_LIBRARIES Qt::Test bambucompanioncore
+)
+
+ecm_add_test(pendingcommandtrackertest.cpp
+    TEST_NAME pendingcommandtrackertest
+    LINK_LIBRARIES Qt::Test bambucompanioncore
+)
