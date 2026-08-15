@@ -123,20 +123,24 @@ practical in CI.
 Goal: an empty-but-buildable, installable, loadable-in-Plasma applet skeleton;
 CI green.
 
-- [ ] Top-level CMake build system (`CMakeLists.txt`, `cmake/`), CI skeleton
+- [x] Top-level CMake build system (`CMakeLists.txt`, `cmake/`), CI skeleton
       (`.github/workflows/ci.yml`), `LICENSE`, `README.md` stub (with the
       cloud-API disclaimer), `CONTRIBUTING.md`.
-- [ ] `package/metadata.json` + `package/contents/ui/main.qml` (bare
+- [x] `package/metadata.json` + `package/contents/ui/main.qml` (bare
       `PlasmoidItem` placeholder) + `package/CMakeLists.txt` using
       `kpackage_install_package`. Use `X-Plasma-NotificationAreaCategory:
       "Hardware"` and `X-Plasma-API-Minimum-Version: "6.0"` (verified against
       current `plasma-workspace` applets — no need for the legacy
       `X-Plasma-NotificationArea` key in Plasma 6).
-- [ ] `src/qmlplugin/` stub: a trivial `QML_ELEMENT` `PrinterListModel` with
+- [x] `src/qmlplugin/` stub: a trivial `QML_ELEMENT` `PrinterListModel` with
       dummy data, built via `ecm_add_qml_module`, proving the plugin→applet
       wiring end-to-end before any real protocol code exists.
-- [ ] `tests/CMakeLists.txt` with one trivial `QtTest`-based smoke test to
+- [x] `tests/CMakeLists.txt` with one trivial `QtTest`-based smoke test to
       prove `ctest` works.
+
+Archived as OpenSpec change
+[`2026-08-15-phase-0-project-scaffolding`](./openspec/changes/archive/2026-08-15-phase-0-project-scaffolding/)
+(CI-passing-on-a-PR left open pending a git remote).
 
 Verify: builds; `kpackagetool6 --type Plasma/Applet -i package` installs it;
 widget appears in "Add Widgets" and, via `X-Plasma-NotificationAreaCategory`,
