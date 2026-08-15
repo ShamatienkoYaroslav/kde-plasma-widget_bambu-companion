@@ -1,0 +1,60 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  Bambu Companion is a KDE Plasma 6 System Tray widget (C++/Qt6/KF6 + QML) that
+  monitors and controls the user's Bambu Lab 3D printers over LAN (local MQTT/FTPS)
+  and Bambu Cloud. See CLAUDE.md for architecture and PLAN.md for the full phased
+  task list this project is being built from, one phase task at a time.
+
+  Tech stack: C++20, Qt6 (Core/Network/Qml/Quick), KDE Frameworks 6 (CoreAddons,
+  I18n, Config, ConfigWidgets, KCMUtils, Package, Notifications, Wallet, Archive),
+  CMake + ECM, libmosquitto (MQTT), libcurl (FTPS - Qt6 dropped FTP support).
+  Packaged as a Plasma 6 Applet (KPackage under package/) with a companion QML
+  plugin built via ecm_add_qml_module (src/qmlplugin/), namespaced
+  io.github.shamatienkoyaroslav.bambucompanion (not org.kde.*, which is reserved).
+
+  Core architecture: PrinterConnection is an abstract interface with two
+  implementations - LanPrinterConnection (libmosquitto MQTT over TLS with
+  trust-on-first-use certificate pinning, since printers use self-signed certs)
+  and CloudPrinterConnection (Bambu Cloud's unofficial/reverse-engineered REST
+  auth + relay MQTT, publicly-trusted certs, no pinning needed). Both share
+  BambuReportParser/BambuCommandBuilder so LAN and Cloud behave identically from
+  the UI's perspective. PrinterRegistry owns the printer list and picks/falls
+  back between transports per each printer's configured connection mode.
+
+  Conventions: unit tests (Qt Test, under tests/) for protocol/ and core/ logic
+  against fixture JSON, run via ctest; transport/UI work is verified manually in
+  a live Plasma session (no headless Plasma+real-printer testing in CI). Secrets
+  (LAN access codes, cloud tokens) go through KWallet, never KConfigXT. Follow
+  each phase's task breakdown in PLAN.md; don't jump ahead to a later phase's
+  components before the current one is done.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

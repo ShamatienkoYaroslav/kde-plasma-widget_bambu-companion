@@ -1,0 +1,306 @@
+# PLAN.md — Bambu Companion implementation roadmap
+
+KDE Plasma 6 System Tray widget (C++/Qt6/KF6 + QML) that shows and controls a
+list of the user's Bambu Lab 3D printers. Inspired by
+[ypMrg/omarchy-bambu-companion](https://github.com/ypMrg/omarchy-bambu-companion)
+(single-printer, LAN-only, monitoring-only Quickshell widget) but broader:
+**multi-printer, LAN + Bambu Cloud, monitoring + print control**, with a camera
+view as a later phase.
+
+See [`CLAUDE.md`](./CLAUDE.md) for architecture and build instructions.
+
+## How this document is used
+
+Each checklist item below becomes one [OpenSpec](https://github.com/Fission-AI/OpenSpec)
+change, worked one at a time via `/opsx:propose "<item>"` → review → `/opsx:apply`
+→ `/opsx:archive`. Work phases in order; within a phase, earlier items are
+dependencies for later ones unless noted otherwise. Check items off as their
+OpenSpec change is archived.
+
+Locked-in scope decisions (do not re-litigate):
+- **Multi-printer**: a list of printers, not just one.
+- **Connectivity**: both LAN (local MQTT/FTPS, access code) and Bambu Cloud
+  (account login), selectable per printer or as a global default, with
+  LAN-preferred-then-cloud fallback supported.
+- **Control**: pause/resume/stop/skip-objects, not monitoring-only — with a
+  confirmation dialog before the destructive `stop` command.
+- **Camera live view**: planned, but as a later phase (Phase 4), not part of
+  the initial monitoring/control work.
+- **Printer discovery**: manual entry only (host/IP, serial, access code for
+  LAN; account login + device picker for Cloud). No SSDP auto-discovery.
+
+## Repository layout (target end-state)
+
+```
+src/core/              PrinterProfile, PrinterStatus, PrinterCommand,
+                        PrinterConnection (interface), PrinterRegistry,
+                        ConnectionFactory
+src/transport/lan/      MqttClient (libmosquitto + TLS), LanPrinterConnection,
+                        FtpsFileClient (libcurl), LanCameraSource (phase 4)
+src/transport/cloud/    CloudAuthClient, CloudDeviceDirectory, CloudPrinterConnection
+src/protocol/           BambuReportParser, BambuCommandBuilder (shared LAN + Cloud)
+src/security/           SecretStore (KWallet), CertificateProbe, CertificateTrustStore
+src/notifications/      PrintNotifier (KNotification)
+src/qmlplugin/          PrinterListModel, PrinterController (QML_ELEMENT, built via
+                        ecm_add_qml_module)
+package/                metadata.json + contents/ui/*.qml + contents/config/*.qml
+                        (the installable Plasma 6 Applet KPackage)
+tests/                  protocol/, core/, fixtures/ (sample printer report JSON)
+po/                     translations
+```
+
+## Build system
+
+- Top-level CMake using ECM: `find_package(ECM REQUIRED NO_MODULE)`,
+  `include(ECMQmlModule)`.
+- `find_package(Qt6 COMPONENTS Core Network Qml Quick)`.
+- `find_package(KF6 COMPONENTS CoreAddons I18n Config ConfigWidgets KCMUtils
+  Package Notifications Wallet Archive)`.
+- `pkg_check_modules(... IMPORTED_TARGET libmosquitto libcurl)` — neither has a
+  reliable CMake config-package across distros; use pkg-config.
+- Applet packaging via `kpackage_install_package(package
+  io.github.shamatienkoyaroslav.bambucompanion plasmoids plasma)`.
+- QML plugin via `ecm_add_qml_module` / `ecm_finalize_qml_module`, with
+  `QML_ELEMENT`/`QML_SINGLETON` macros directly in C++ headers — no manual
+  `qmlRegisterType()` calls.
+
+## Protocol reference (carry into implementation)
+
+Sources: [Doridian/OpenBambuAPI `mqtt.md`](https://github.com/Doridian/OpenBambuAPI/blob/main/mqtt.md),
+[coelacant1/Bambu-Lab-Cloud-API](https://github.com/coelacant1/Bambu-Lab-Cloud-API).
+Both are community reverse-engineering references, not official Bambu Lab docs.
+
+**LAN MQTT** — `mqtts://<printer-ip>:8883`, username `bblp`, password = the
+printer's LAN access code, self-signed TLS cert (pin it TOFU-style). Subscribe
+`device/{serial}/report`, publish `device/{serial}/request`. On connect, publish
+once: `{"pushing":{"sequence_id":"0","command":"pushall","version":1,"push_target":1}}`
+— don't poll this repeatedly, P1-series printers stream deltas afterward and the
+parser must merge deltas into existing state, not overwrite wholesale.
+
+**LAN control commands** — all published to `device/{serial}/request`:
+- `{"print":{"sequence_id":"<n>","command":"pause","param":""}}` (same shape for
+  `resume`/`stop`)
+- `{"print":{"sequence_id":"<n>","command":"skip_objects","timestamp":<unix_ts>,"obj_list":[<id>,...]}}`
+- Correlate command acknowledgement via the echoed `sequence_id` on the
+  `.../report` topic (`"result":"success"` or a failure + `"reason"`).
+
+**Bambu Cloud (unofficial — verify empirically, may drift without notice)**:
+- Auth: `POST https://api.bambulab.com/v1/user-service/user/login` with
+  `{"account":"<email>","password":"<password>"}`. If the response indicates
+  `"loginType":"verifyCode"`, request a code via
+  `POST /v1/user-service/user/sendemail/code` (`{"email":"<email>","type":"codeLogin"}`)
+  then re-POST login with `{"account":"<email>","code":"<code>"}` to get an
+  `accessToken`. China region uses `api.bambulab.cn` with a different flow.
+- Device list: `GET https://api.bambulab.com/v1/iot-service/api/user/bind`
+  with `Authorization: Bearer <token>` → device entries include `dev_id`,
+  `name`, `online`, and often the device's own `dev_access_code` (useful for
+  opportunistic LAN fallback).
+- Relay MQTT: `<region>.mqtt.bambulab.com:8883` (e.g. `us.mqtt.bambulab.com`),
+  **publicly-trusted** TLS cert (no TOFU pinning needed, unlike LAN). Exact
+  username/password frame for the relay connection is the least-confirmed part
+  of this whole plan — verify against a real account early in Phase 3 rather
+  than assuming the reverse-engineered shape is exact.
+- Document this API as unofficial/reverse-engineered in the README and in the
+  cloud-login UI copy — Bambu Lab could change or break it without notice.
+
+**FTPS (plate-preview thumbnails)** — implicit TLS, port 990, user `bblp` /
+access code. Qt6 dropped FTP support entirely from `QNetworkAccessManager`; use
+libcurl, which handles the TLS-session-reuse-across-control-and-data-channel
+quirk many FTPS servers (including Bambu's) require.
+
+## Testing approach
+
+Unit-test `protocol/` and `core/` logic against fixture JSON (Qt Test, run via
+`ctest`) — this is pure logic and fully CI-able. `transport/` and UI work is
+verified manually in a live Plasma session against a real printer (and, for
+Cloud, a real Bambu account) — headless Plasma + real-printer testing isn't
+practical in CI.
+
+---
+
+## Phase 0 — Project scaffolding
+
+Goal: an empty-but-buildable, installable, loadable-in-Plasma applet skeleton;
+CI green.
+
+- [ ] Top-level CMake build system (`CMakeLists.txt`, `cmake/`), CI skeleton
+      (`.github/workflows/ci.yml`), `LICENSE`, `README.md` stub (with the
+      cloud-API disclaimer), `CONTRIBUTING.md`.
+- [ ] `package/metadata.json` + `package/contents/ui/main.qml` (bare
+      `PlasmoidItem` placeholder) + `package/CMakeLists.txt` using
+      `kpackage_install_package`. Use `X-Plasma-NotificationAreaCategory:
+      "Hardware"` and `X-Plasma-API-Minimum-Version: "6.0"` (verified against
+      current `plasma-workspace` applets — no need for the legacy
+      `X-Plasma-NotificationArea` key in Plasma 6).
+- [ ] `src/qmlplugin/` stub: a trivial `QML_ELEMENT` `PrinterListModel` with
+      dummy data, built via `ecm_add_qml_module`, proving the plugin→applet
+      wiring end-to-end before any real protocol code exists.
+- [ ] `tests/CMakeLists.txt` with one trivial `QtTest`-based smoke test to
+      prove `ctest` works.
+
+Verify: builds; `kpackagetool6 --type Plasma/Applet -i package` installs it;
+widget appears in "Add Widgets" and, via `X-Plasma-NotificationAreaCategory`,
+is auto-discovered by the system tray with placeholder content rendering; CI
+green.
+
+## Phase 1 — LAN monitoring MVP (read-only)
+
+Goal: add a real LAN printer manually, see its live status (state, progress,
+temps, fans, speed, WiFi signal, layer/Z) in the tray popup. No control
+commands yet, no cloud.
+
+- [ ] `src/core/PrinterProfile`, `PrinterStatus`, `PrinterConnection`
+      (abstract interface — include the `virtual CameraSource*
+      cameraSource() { return nullptr; }` extension point now, implemented in
+      Phase 4), `PrinterRegistry` (LAN-only for now), `ConnectionFactory`
+      (returns `LanPrinterConnection` only for now).
+- [ ] `src/transport/lan/MqttClient` — libmosquitto wrapper: TLS connect
+      (`mosquitto_tls_insecure_set`, since printer certs are self-signed and
+      already TOFU-pinned by our own probe), subscribe/publish helpers, Qt
+      signals (`connected()`, `disconnected(reason)`, `messageReceived(QByteArray)`).
+- [ ] `src/security/CertificateProbe` (QSslSocket-based TLS handshake to read
+      the peer cert and compute its SHA-256 fingerprint) and
+      `CertificateTrustStore` (persisted pinned fingerprints, KConfig-backed).
+      Wire the TOFU flow before the first real MQTT connect to a given printer.
+- [ ] `src/protocol/BambuReportParser` (JSON report → `PrinterStatus`,
+      handling both full and delta/partial reports by merging into existing
+      state) and `BambuCommandBuilder::pushAll()`.
+- [ ] `src/transport/lan/LanPrinterConnection` — owns an `MqttClient`,
+      publishes `pushall` on connect, parses incoming messages, emits
+      `statusUpdated`.
+- [ ] `src/security/SecretStore` (KWallet) for the LAN access code.
+- [ ] `src/qmlplugin/PrinterListModel` (real, backed by `PrinterRegistry`),
+      `PrinterController` (`Q_INVOKABLE addLanPrinter(host, serial,
+      accessCode, mqttPort)`).
+- [ ] `package/contents/ui/FullRepresentation.qml`, `PrinterListItem.qml`,
+      `PrinterDetailView.qml`, `AddPrinterDialog.qml` (LAN fields only),
+      `CertificateConfirmDialog.qml` (TOFU fingerprint confirmation UX,
+      modeled on SSH host-key prompts).
+- [ ] `package/contents/config/ConfigPrinters.qml`, `config/main.xml`
+      (global settings only at this point).
+
+Verify: unit tests for `BambuReportParser` against fixture JSON (captured
+from a real printer's `report` topic, or from OpenBambuAPI sample payloads),
+including delta-merge behavior; unit tests for `CertificateTrustStore`
+accept/mismatch logic; manual test against a real printer in a live Plasma
+session — add it, confirm the TOFU dialog appears once, see live status
+updates, verify reconnect after a printer reboot.
+
+## Phase 2 — LAN control commands
+
+Goal: pause/resume/stop/skip-objects from the tray popup, with confirmation
+before the destructive `stop` action.
+
+- [ ] `src/core/PrinterCommand` (enum `Pause`/`Resume`/`Stop`/`SkipObjects` +
+      payload data) and `BambuCommandBuilder::pause()/resume()/stop()/
+      skipObjects(objectIds)` per the payload shapes above.
+- [ ] `LanPrinterConnection::sendCommand()` — publishes to
+      `device/{serial}/request`, correlates the echoed `sequence_id` on
+      `.../report` back to the originating command, emits `commandAcked(id,
+      success, reason)`.
+- [ ] `PrinterController` invokables: `pause(printerId)`, `resume(printerId)`,
+      `stop(printerId)`, `skipObjects(printerId, ids)`.
+- [ ] `package/contents/ui/ConfirmActionDialog.qml` (used for `stop` only;
+      pause/resume fire immediately), wired into `PrinterDetailView.qml`.
+- [ ] Skip-objects UI: if the current print's plate/object list isn't
+      reliably present in the local report payload, scope this to a manual
+      "enter object IDs" fallback rather than blocking the whole feature on
+      plate-object discovery.
+
+Verify: unit tests on `BambuCommandBuilder` payload shapes and on
+sequence-id ack correlation (against a fake connection); manual
+pause/resume/stop against a real printer. Skip-objects needs an active
+multi-plate print to validate meaningfully — document as manual-only.
+
+## Phase 2.5 — LAN plate-preview thumbnails
+
+Goal: show the 2D plate preview thumbnail for the currently-printing file.
+
+- [ ] `src/transport/lan/FtpsFileClient` (libcurl, implicit TLS
+      `ftps://<host>:990`, user `bblp`, password = access code) — list and
+      download the current gcode/3mf file.
+- [ ] 3mf/gcode thumbnail extraction (3mf is a zip; use `KF6::Archive`
+      rather than vendoring a zip library) — add `Archive` to the KF6
+      `find_package` components.
+- [ ] Disk-cache extracted thumbnails (`QStandardPaths::CacheLocation`),
+      keyed by filename + mtime, to avoid re-downloading every poll.
+
+Verify: unit test 3mf-thumbnail extraction against a sample `.3mf` fixture;
+manual check against a real printer's current print file.
+
+## Phase 3 — Bambu Cloud support
+
+Goal: log into a Bambu account, list bound devices, add printers by picking
+from that list, monitor/control via the cloud MQTT relay for printers not
+reachable locally (or by user preference).
+
+- [ ] **Spike first**: a small manual verification pass confirming the exact
+      cloud MQTT username/password auth frame and topic conventions against a
+      real Bambu account, before building the rest of this phase — this is
+      the least-confirmed part of the whole protocol reference above.
+- [ ] `src/transport/cloud/CloudAuthClient` — `login(email, password)`, 2FA
+      branch (`twoFactorRequired` signal → `submitVerificationCode(code)`),
+      `logout()`. Token stored via `SecretStore`. Since Bambu doesn't
+      document a refresh-token endpoint, re-login on token expiry rather
+      than assuming one exists.
+- [ ] `src/transport/cloud/CloudDeviceDirectory` — fetches and parses the
+      bound-device list into `PrinterProfile` candidates for an "add cloud
+      printer" picker.
+- [ ] `src/transport/cloud/CloudPrinterConnection` — implements
+      `PrinterConnection` against the relay MQTT broker, reusing
+      `BambuReportParser`/`BambuCommandBuilder`.
+- [ ] Extend `PrinterProfile`/`ConnectionFactory`/`PrinterRegistry` for
+      `ConnectionMode` (`LanOnly`, `CloudOnly`, `PreferLanThenCloud`) —
+      fallback logic lives in `PrinterRegistry`, not inside either connection
+      class, so LAN and Cloud stay independently simple and testable.
+- [ ] `package/contents/ui/CloudLoginDialog.qml` (email/password + 2FA step +
+      explicit "unofficial API" disclaimer), extend `AddPrinterDialog.qml`
+      with a "pick from my Bambu account" path.
+
+Verify: unit tests for `CloudAuthClient`'s state machine against a mocked
+HTTP backend (no real network call needed in CI); manual end-to-end test
+against a real Bambu Cloud account for login/2FA/device-list/relayed
+status+control — not automatable in CI.
+
+## Phase 4 — Camera live view (LAN only)
+
+Goal: live JPEG stream from a printer's local camera (proprietary framed-JPEG
+protocol on port 6000), shown in `PrinterDetailView.qml`.
+
+- [ ] Reverse-engineering verification pass on the port-6000 framing/auth
+      protocol (cross-check against `bambulabs_api`'s and Home Assistant's
+      Bambu Lab integration implementations) before writing any code — this
+      is more obscure than the MQTT/REST surfaces already documented above.
+- [ ] `src/transport/lan/LanCameraSource`, implementing the `CameraSource`
+      extension point added to `PrinterConnection` back in Phase 1; override
+      it in `LanPrinterConnection` only.
+- [ ] Frame delivery to QML (`QQuickImageProvider` or a `VideoOutput`-fed
+      frame sink) exposed via `PrinterListModel`/`PrinterController`.
+- [ ] `package/contents/ui/CameraView.qml`.
+
+Verify: manual only, against a real printer with the camera enabled; add a
+frame-parsing unit test only if/once the binary header format is nailed down
+during the verification pass.
+
+## Phase 5 — Polish / packaging
+
+Goal: ready for real-world distribution.
+
+- [ ] `src/notifications/PrintNotifier` (KNotification) wired to
+      `PrinterStatus` transitions — print finished, print failed/error code
+      present, printer went unexpectedly offline, filament runout if
+      surfaced in the report — plus an installed `.notifyrc` declaring the
+      event IDs.
+- [ ] `package/contents/config/ConfigGeneral.qml` completed (poll interval,
+      notification toggles, default connection mode) backed by KConfigXT.
+- [ ] Translations (`po/`, `ki18n_install`).
+- [ ] AppStream metainfo XML (KDE Store / distro catalog discoverability).
+- [ ] Packaging files as stretch goals: Fedora COPR `.spec`, AUR `PKGBUILD`.
+- [ ] Accessibility pass: keyboard navigation in the popup, screen-reader
+      labels.
+- [ ] README finalized: LAN vs Cloud setup instructions, the TOFU security
+      model explained, the cloud-API-is-unofficial disclaimer front and
+      center.
+- [ ] Full manual soak test: multiple printers (mixed LAN/Cloud), printer
+      offline/online transitions, wallet locked/unlocked, Plasma restart
+      persistence of the printer list and reconnection behavior.
