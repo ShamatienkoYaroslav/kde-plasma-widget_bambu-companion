@@ -102,4 +102,10 @@
       validate meaningfully — document result (or that it wasn't possible to
       test in this session) rather than skipping silently.
       **Blocked in this session** for the same reason as 6.3.
-- [ ] 6.5 Confirm CI still passes.
+- [x] 6.5 Confirm CI still passes.
+      (Found and fixed two real, pre-existing CI gaps in the process: the
+      workflow's dnf install list was never updated for Phase 1's
+      libmosquitto/KWallet/KConfig dependencies, and every QTest binary
+      aborted in the headless container without `QT_QPA_PLATFORM=offscreen`
+      — verified the fix locally by reproducing the abort with a fully
+      clean env before pushing. CI is green as of run 31888026536.)

@@ -198,18 +198,19 @@ Archived as OpenSpec change
 Goal: pause/resume/stop/skip-objects from the tray popup, with confirmation
 before the destructive `stop` action.
 
-- [ ] `src/core/PrinterCommand` (enum `Pause`/`Resume`/`Stop`/`SkipObjects` +
+- [x] `src/core/PrinterCommand` (enum `Pause`/`Resume`/`Stop`/`SkipObjects` +
       payload data) and `BambuCommandBuilder::pause()/resume()/stop()/
       skipObjects(objectIds)` per the payload shapes above.
-- [ ] `LanPrinterConnection::sendCommand()` — publishes to
+- [x] `LanPrinterConnection::sendCommand()` — publishes to
       `device/{serial}/request`, correlates the echoed `sequence_id` on
       `.../report` back to the originating command, emits `commandAcked(id,
-      success, reason)`.
-- [ ] `PrinterController` invokables: `pause(printerId)`, `resume(printerId)`,
+      success, reason)`. (Sequence-id/timeout matching factored into a
+      standalone, independently-tested `PendingCommandTracker`.)
+- [x] `PrinterController` invokables: `pause(printerId)`, `resume(printerId)`,
       `stop(printerId)`, `skipObjects(printerId, ids)`.
-- [ ] `package/contents/ui/ConfirmActionDialog.qml` (used for `stop` only;
+- [x] `package/contents/ui/ConfirmActionDialog.qml` (used for `stop` only;
       pause/resume fire immediately), wired into `PrinterDetailView.qml`.
-- [ ] Skip-objects UI: if the current print's plate/object list isn't
+- [x] Skip-objects UI: if the current print's plate/object list isn't
       reliably present in the local report payload, scope this to a manual
       "enter object IDs" fallback rather than blocking the whole feature on
       plate-object discovery.
@@ -218,6 +219,17 @@ Verify: unit tests on `BambuCommandBuilder` payload shapes and on
 sequence-id ack correlation (against a fake connection); manual
 pause/resume/stop against a real printer. Skip-objects needs an active
 multi-plate print to validate meaningfully — document as manual-only.
+
+Code complete, all unit tests pass, CI green (fixed two pre-existing CI gaps
+along the way: missing Phase-1 dependencies in the workflow, and a headless-
+container Qt platform-plugin crash needing `QT_QPA_PLATFORM=offscreen`).
+**Manual hardware verification (pause/resume/stop/skip-objects against a real
+printer, and confirming the ack-payload-shape assumption in the archived
+change's `design.md`) is still pending** — neither configured printer was
+reachable in LAN mode during this session. Revisit when one is.
+
+Archived as OpenSpec change
+[`2026-08-15-phase-2-lan-control-commands`](./openspec/changes/archive/2026-08-15-phase-2-lan-control-commands/).
 
 ## Phase 2.5 — LAN plate-preview thumbnails
 
