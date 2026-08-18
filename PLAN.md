@@ -253,26 +253,31 @@ Goal: log into a Bambu account, list bound devices, add printers by picking
 from that list, monitor/control via the cloud MQTT relay for printers not
 reachable locally (or by user preference).
 
-- [ ] **Spike first**: a small manual verification pass confirming the exact
+- [x] **Spike first**: a small manual verification pass confirming the exact
       cloud MQTT username/password auth frame and topic conventions against a
       real Bambu account, before building the rest of this phase — this is
       the least-confirmed part of the whole protocol reference above.
-- [ ] `src/transport/cloud/CloudAuthClient` — `login(email, password)`, 2FA
+      (Done differently than planned: built against the best-documented
+      shape first, then verified live through the applet's own UI rather
+      than a separate pre-implementation spike — see the archived change's
+      `design.md` for why. The verification happened; the auth frame it
+      confirmed turned out wrong — see below.)
+- [x] `src/transport/cloud/CloudAuthClient` — `login(email, password)`, 2FA
       branch (`twoFactorRequired` signal → `submitVerificationCode(code)`),
       `logout()`. Token stored via `SecretStore`. Since Bambu doesn't
       document a refresh-token endpoint, re-login on token expiry rather
       than assuming one exists.
-- [ ] `src/transport/cloud/CloudDeviceDirectory` — fetches and parses the
+- [x] `src/transport/cloud/CloudDeviceDirectory` — fetches and parses the
       bound-device list into `PrinterProfile` candidates for an "add cloud
       printer" picker.
-- [ ] `src/transport/cloud/CloudPrinterConnection` — implements
+- [x] `src/transport/cloud/CloudPrinterConnection` — implements
       `PrinterConnection` against the relay MQTT broker, reusing
       `BambuReportParser`/`BambuCommandBuilder`.
-- [ ] Extend `PrinterProfile`/`ConnectionFactory`/`PrinterRegistry` for
+- [x] Extend `PrinterProfile`/`ConnectionFactory`/`PrinterRegistry` for
       `ConnectionMode` (`LanOnly`, `CloudOnly`, `PreferLanThenCloud`) —
       fallback logic lives in `PrinterRegistry`, not inside either connection
       class, so LAN and Cloud stay independently simple and testable.
-- [ ] `package/contents/ui/CloudLoginDialog.qml` (email/password + 2FA step +
+- [x] `package/contents/ui/CloudLoginDialog.qml` (email/password + 2FA step +
       explicit "unofficial API" disclaimer), extend `AddPrinterDialog.qml`
       with a "pick from my Bambu account" path.
 
@@ -280,6 +285,21 @@ Verify: unit tests for `CloudAuthClient`'s state machine against a mocked
 HTTP backend (no real network call needed in CI); manual end-to-end test
 against a real Bambu Cloud account for login/2FA/device-list/relayed
 status+control — not automatable in CI.
+
+Code complete, all unit tests pass, CI green. Confirmed working end-to-end
+against a real account: login, 2FA, device listing, adding cloud printers.
+**Known open gap: live cloud MQTT status/control does not work.** The
+account uid needed for the MQTT relay's username couldn't be determined —
+the access token is an opaque string (not a JWT, as first assumed), and a
+follow-up `/my/info` endpoint guess 404s; neither the login response nor the
+device-list response carry a uid anywhere. Degrades safely (`Error` state,
+no crash/hang), with permanent diagnostic logging in place (HTTP statuses
+and response key names, never values) to pick this back up without
+re-guessing from scratch. See the archived change's `design.md` Risks
+section for full detail.
+
+Archived as OpenSpec change
+[`2026-08-18-phase-3-bambu-cloud-support`](./openspec/changes/archive/2026-08-18-phase-3-bambu-cloud-support/).
 
 ## Phase 4 — Camera live view (LAN only)
 
