@@ -4,6 +4,7 @@
 #include <KSharedConfig>
 
 #include "../security/SecretStore.h"
+#include "../transport/cloud/CloudPrinterConnection.h"
 #include "ConnectionFactory.h"
 
 namespace
@@ -50,8 +51,13 @@ void PrinterRegistry::loadPersistedPrinters()
         profile.host = group.readEntry("Host");
         profile.serial = group.readEntry("Serial");
         profile.mqttPort = static_cast<quint16>(group.readEntry("MqttPort", 8883));
+        profile.mode = static_cast<PrinterProfile::ConnectionMode>(group.readEntry("Mode", static_cast<int>(PrinterProfile::ConnectionMode::LanOnly)));
 
-        if (profile.id.isNull() || profile.host.isEmpty() || profile.serial.isEmpty()) {
+        if (profile.id.isNull() || profile.serial.isEmpty()) {
+            continue;
+        }
+        // Cloud-only printers have no host; LAN and LAN-preferred ones do.
+        if (profile.mode != PrinterProfile::ConnectionMode::CloudOnly && profile.host.isEmpty()) {
             continue;
         }
 
@@ -69,14 +75,30 @@ void PrinterRegistry::persistProfile(const PrinterProfile &profile)
     group.writeEntry("Host", profile.host);
     group.writeEntry("Serial", profile.serial);
     group.writeEntry("MqttPort", static_cast<int>(profile.mqttPort));
+    group.writeEntry("Mode", static_cast<int>(profile.mode));
     config->sync();
 }
 
-QUuid PrinterRegistry::addLanPrinter(const QString &name, const QString &host, const QString &serial, const QString &accessCode, quint16 mqttPort)
+QUuid PrinterRegistry::addLanPrinter(const QString &name, const QString &host, const QString &serial, const QString &accessCode, quint16 mqttPort, PrinterProfile::ConnectionMode mode)
 {
-    const PrinterProfile profile = PrinterProfile::createLan(name, host, serial, mqttPort);
+    PrinterProfile profile = PrinterProfile::createLan(name, host, serial, mqttPort);
+    profile.mode = mode;
 
     SecretStore::instance().storeLanAccessCode(profile.id, accessCode);
+    persistProfile(profile);
+
+    m_profiles.insert(profile.id, profile);
+    Q_EMIT printerAdded(profile.id);
+
+    startConnection(profile);
+
+    return profile.id;
+}
+
+QUuid PrinterRegistry::addCloudPrinter(const QString &devId, const QString &name)
+{
+    const PrinterProfile profile = PrinterProfile::createCloud(name, devId);
+
     persistProfile(profile);
 
     m_profiles.insert(profile.id, profile);
@@ -95,6 +117,7 @@ void PrinterRegistry::removePrinter(const QUuid &id)
     }
     m_profiles.remove(id);
     m_statuses.remove(id);
+    m_cloudFallbackDone.remove(id);
 
     const KSharedConfigPtr config = openAppConfig();
     config->deleteGroup(groupNameFor(id));
@@ -107,17 +130,22 @@ void PrinterRegistry::removePrinter(const QUuid &id)
 
 void PrinterRegistry::startConnection(const PrinterProfile &profile)
 {
-    auto *connection = ConnectionFactory::create(profile, this);
-    m_connections.insert(profile.id, connection);
+    wireAndStart(profile.id, profile.mode, ConnectionFactory::create(profile, this));
+}
 
-    const QUuid id = profile.id;
+void PrinterRegistry::wireAndStart(const QUuid &id, PrinterProfile::ConnectionMode mode, PrinterConnection *connection)
+{
+    m_connections.insert(id, connection);
 
     connect(connection, &PrinterConnection::statusUpdated, this, [this, id](const PrinterStatus &status) {
         m_statuses.insert(id, status);
         Q_EMIT printerStatusChanged(id);
     });
 
-    connect(connection, &PrinterConnection::connectionStateChanged, this, [this, id](PrinterConnection::ConnectionState) {
+    connect(connection, &PrinterConnection::connectionStateChanged, this, [this, id, mode](PrinterConnection::ConnectionState state) {
+        if (mode == PrinterProfile::ConnectionMode::PreferLanThenCloud && state == PrinterConnection::ConnectionState::Error) {
+            fallBackToCloud(id);
+        }
         Q_EMIT printerConnectionStateChanged(id);
     });
 
@@ -132,6 +160,31 @@ void PrinterRegistry::startConnection(const PrinterProfile &profile)
     });
 
     connection->start();
+}
+
+void PrinterRegistry::fallBackToCloud(const QUuid &id)
+{
+    // Only fall back once per printer per process — avoids repeated
+    // Error emissions (e.g. from a connection that keeps retrying and
+    // keeps failing) re-triggering this and churning through connections.
+    if (m_cloudFallbackDone.contains(id)) {
+        return;
+    }
+    m_cloudFallbackDone.insert(id);
+
+    auto *current = m_connections.value(id);
+    if (!current) {
+        return;
+    }
+
+    const PrinterProfile profile = m_profiles.value(id);
+
+    current->disconnect(this);
+    current->stop();
+    current->deleteLater();
+    m_connections.remove(id);
+
+    wireAndStart(id, profile.mode, new CloudPrinterConnection(profile, this));
 }
 
 QList<PrinterProfile> PrinterRegistry::printers() const

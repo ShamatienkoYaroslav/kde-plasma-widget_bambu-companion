@@ -65,3 +65,33 @@ QString SecretStore::lanAccessCode(const QUuid &printerId) const
     }
     return QString();
 }
+
+namespace
+{
+const char kCloudTokenKey[] = "cloud-token";
+}
+
+void SecretStore::storeCloudToken(const QString &token)
+{
+    if (auto *w = wallet()) {
+        w->writePassword(QLatin1String(kCloudTokenKey), token);
+    }
+}
+
+QString SecretStore::cloudToken() const
+{
+    if (auto *w = wallet()) {
+        QString token;
+        if (w->readPassword(QLatin1String(kCloudTokenKey), token) == 0) {
+            return token;
+        }
+    }
+    return QString();
+}
+
+void SecretStore::removeCloudToken()
+{
+    if (auto *w = wallet()) {
+        w->removeEntry(QLatin1String(kCloudTokenKey));
+    }
+}

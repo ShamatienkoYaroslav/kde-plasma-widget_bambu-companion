@@ -28,6 +28,12 @@ add_library(bambucompanioncore STATIC
     transport/lan/LanPrinterConnection.cpp
     transport/lan/PendingCommandTracker.h
     transport/lan/PendingCommandTracker.cpp
+    transport/cloud/CloudAuthClient.h
+    transport/cloud/CloudAuthClient.cpp
+    transport/cloud/CloudDeviceDirectory.h
+    transport/cloud/CloudDeviceDirectory.cpp
+    transport/cloud/CloudPrinterConnection.h
+    transport/cloud/CloudPrinterConnection.cpp
 )
 
 target_include_directories(bambucompanioncore PUBLIC

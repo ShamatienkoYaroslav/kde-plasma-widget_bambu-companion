@@ -16,6 +16,8 @@ target_sources(bambucompanionplugin PRIVATE
     PrinterListModel.cpp
     PrinterController.h
     PrinterController.cpp
+    CloudAccountController.h
+    CloudAccountController.cpp
 )
 
 target_link_libraries(bambucompanionplugin PRIVATE

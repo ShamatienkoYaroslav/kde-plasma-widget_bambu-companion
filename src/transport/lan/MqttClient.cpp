@@ -1,6 +1,15 @@
 #include "MqttClient.h"
 
+#include <QDebug>
+#include <QFile>
+#include <QLoggingCategory>
+
 #include <mosquitto.h>
+
+namespace
+{
+Q_LOGGING_CATEGORY(lcMqtt, "bambucompanion.mqtt")
+}
 
 namespace
 {
@@ -12,6 +21,24 @@ void ensureLibraryInitialized()
         mosquitto_lib_init();
         mosquittoLibInitialized = true;
     }
+}
+
+// No portable "use the system default CA store" call exists in libmosquitto;
+// it needs an explicit cafile/capath. Try the common distro locations.
+QString systemCaBundlePath()
+{
+    static const QStringList candidates = {
+        QStringLiteral("/etc/ssl/certs/ca-certificates.crt"), // Debian/Ubuntu/Arch
+        QStringLiteral("/etc/pki/tls/certs/ca-bundle.crt"), // Fedora/RHEL
+        QStringLiteral("/etc/ssl/ca-bundle.pem"), // openSUSE
+        QStringLiteral("/etc/ssl/cert.pem"), // Alpine and others
+    };
+    for (const QString &path : candidates) {
+        if (QFile::exists(path)) {
+            return path;
+        }
+    }
+    return QString();
 }
 }
 
@@ -34,18 +61,38 @@ MqttClient::~MqttClient()
     }
 }
 
-void MqttClient::connectToHost(const QString &host, quint16 port, const QString &username, const QString &password)
+void MqttClient::connectToHost(const QString &host, quint16 port, const QString &username, const QString &password, bool useSystemCaTrust)
 {
     mosquitto_username_pw_set(m_mosq, username.toUtf8().constData(), password.toUtf8().constData());
 
-    // Printers use self-signed certificates; skip libmosquitto's own chain
-    // validation here since the exact certificate has already been vetted
-    // via CertificateProbe/CertificateTrustStore before this call is made.
-    mosquitto_tls_set(m_mosq, nullptr, nullptr, nullptr, nullptr, nullptr);
-    mosquitto_tls_insecure_set(m_mosq, true);
+    if (useSystemCaTrust) {
+        const QString caBundle = systemCaBundlePath();
+        if (!caBundle.isEmpty()) {
+            qCDebug(lcMqtt) << "using system CA bundle" << caBundle << "for" << host;
+            mosquitto_tls_set(m_mosq, caBundle.toUtf8().constData(), nullptr, nullptr, nullptr, nullptr);
+        } else {
+            // No system CA bundle found at any common distro path — fail
+            // open to insecure mode rather than leaving the connection
+            // unusable. Known gap, flagged in the Phase 3 design doc's Risks
+            // section; worth revisiting with a more robust CA lookup later.
+            qCWarning(lcMqtt) << "no system CA bundle found at any known path; falling back to insecure TLS for" << host;
+            mosquitto_tls_set(m_mosq, nullptr, nullptr, nullptr, nullptr, nullptr);
+            mosquitto_tls_insecure_set(m_mosq, true);
+        }
+    } else {
+        // Printers use self-signed certificates; skip libmosquitto's own
+        // chain validation here since the exact certificate has already been
+        // vetted via CertificateProbe/CertificateTrustStore before this call
+        // is made.
+        mosquitto_tls_set(m_mosq, nullptr, nullptr, nullptr, nullptr, nullptr);
+        mosquitto_tls_insecure_set(m_mosq, true);
+    }
+
+    qCDebug(lcMqtt) << "connecting to" << host << ':' << port << "as" << username;
 
     const int rc = mosquitto_connect_async(m_mosq, host.toUtf8().constData(), port, 60);
     if (rc != MOSQ_ERR_SUCCESS) {
+        qCWarning(lcMqtt) << "mosquitto_connect_async failed for" << host << ':' << mosquitto_strerror(rc);
         Q_EMIT errorOccurred(QString::fromUtf8(mosquitto_strerror(rc)));
         return;
     }
@@ -83,9 +130,11 @@ void MqttClient::onConnect(mosquitto *, void *userdata, int rc)
 {
     auto *self = static_cast<MqttClient *>(userdata);
     if (rc == 0) {
+        qCDebug(lcMqtt) << "connected";
         self->m_connected = true;
         Q_EMIT self->connected();
     } else {
+        qCWarning(lcMqtt) << "connect refused:" << mosquitto_connack_string(rc);
         Q_EMIT self->errorOccurred(QString::fromUtf8(mosquitto_connack_string(rc)));
     }
 }
@@ -93,6 +142,7 @@ void MqttClient::onConnect(mosquitto *, void *userdata, int rc)
 void MqttClient::onDisconnect(mosquitto *, void *userdata, int rc)
 {
     auto *self = static_cast<MqttClient *>(userdata);
+    qCDebug(lcMqtt) << "disconnected:" << mosquitto_strerror(rc);
     self->m_connected = false;
     Q_EMIT self->disconnected(QString::fromUtf8(mosquitto_strerror(rc)));
 }

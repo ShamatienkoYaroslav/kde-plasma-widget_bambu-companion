@@ -4,6 +4,8 @@
 #include <QList>
 #include <QString>
 
+#include "../core/PrinterCommand.h"
+
 class BambuCommandBuilder
 {
 public:
@@ -16,4 +18,8 @@ public:
     static QByteArray resume(const QString &sequenceId);
     static QByteArray stop(const QString &sequenceId);
     static QByteArray skipObjects(const QString &sequenceId, const QList<int> &objectIds);
+
+    // Dispatches to the builder above matching command.type — shared by
+    // every PrinterConnection implementation's sendCommand().
+    static QByteArray build(const QString &sequenceId, const PrinterCommand &command);
 };

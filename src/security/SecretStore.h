@@ -20,6 +20,11 @@ public:
     QString lanAccessCode(const QUuid &printerId) const;
     void removeLanAccessCode(const QUuid &printerId);
 
+    // Single Bambu Cloud account token — no per-printer scoping (see design.md).
+    void storeCloudToken(const QString &token);
+    QString cloudToken() const;
+    void removeCloudToken();
+
 private:
     explicit SecretStore(QObject *parent = nullptr);
 

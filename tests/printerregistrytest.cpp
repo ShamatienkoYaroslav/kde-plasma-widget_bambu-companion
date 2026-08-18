@@ -1,4 +1,7 @@
+#include <algorithm>
+
 #include <QFile>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -46,6 +49,50 @@ private slots:
         QVERIFY(contents.contains(QStringLiteral("203.0.113.5")));
         QVERIFY(contents.contains(QStringLiteral("SERIALXYZ")));
         QVERIFY(!contents.contains(QStringLiteral("s3cr3t-access-code")));
+    }
+
+    void addingACloudPrinterPersistsCloudOnlyMode()
+    {
+        auto &registry = PrinterRegistry::instance();
+        const QUuid id = registry.addCloudPrinter(QStringLiteral("DEV42"), QStringLiteral("Cloud Printer"));
+
+        QVERIFY(!id.isNull());
+
+        const PrinterProfile profile = registry.profile(id);
+        QCOMPARE(profile.name, QStringLiteral("Cloud Printer"));
+        QCOMPARE(profile.serial, QStringLiteral("DEV42"));
+        QCOMPARE(profile.mode, PrinterProfile::ConnectionMode::CloudOnly);
+    }
+
+    void preferLanThenCloudFallsBackAfterLanFails()
+    {
+        auto &registry = PrinterRegistry::instance();
+
+        // Port 1 on loopback: nothing listens there, so the certificate
+        // probe's TCP connect is refused almost immediately rather than
+        // timing out, keeping this test fast.
+        const QUuid id = registry.addLanPrinter(QStringLiteral("Fallback Printer"),
+                                                 QStringLiteral("127.0.0.1"),
+                                                 QStringLiteral("FALLBACKSERIAL"),
+                                                 QStringLiteral("code"),
+                                                 1,
+                                                 PrinterProfile::ConnectionMode::PreferLanThenCloud);
+        QVERIFY(!id.isNull());
+
+        QSignalSpy stateChangedSpy(&registry, &PrinterRegistry::printerConnectionStateChanged);
+
+        // The LAN attempt fails (Error), PrinterRegistry falls back to a
+        // CloudPrinterConnection, which itself immediately fails too (not
+        // logged into a Bambu account in this test) — so at least two
+        // state-change emissions for this printer indicates the fallback
+        // path ran, not just the initial LAN failure alone.
+        QTRY_VERIFY_WITH_TIMEOUT(std::count_if(stateChangedSpy.begin(),
+                                                stateChangedSpy.end(),
+                                                [&id](const QList<QVariant> &args) {
+                                                    return args.at(0).value<QUuid>() == id;
+                                                })
+                                      >= 2,
+                                  5000);
     }
 
 private:

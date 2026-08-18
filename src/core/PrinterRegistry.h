@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QList>
 #include <QObject>
+#include <QSet>
 #include <QUuid>
 
 #include "PrinterConnection.h"
@@ -16,7 +17,17 @@ class PrinterRegistry : public QObject
 public:
     static PrinterRegistry &instance();
 
-    QUuid addLanPrinter(const QString &name, const QString &host, const QString &serial, const QString &accessCode, quint16 mqttPort = 8883);
+    // `mode` defaults to LanOnly; PreferLanThenCloud is reachable through
+    // this same entry point (no separate UI path yet — see PLAN.md's Phase 3
+    // scope) so the fallback behavior in printer-management's spec is at
+    // least programmatically usable and testable.
+    QUuid addLanPrinter(const QString &name,
+                         const QString &host,
+                         const QString &serial,
+                         const QString &accessCode,
+                         quint16 mqttPort = 8883,
+                         PrinterProfile::ConnectionMode mode = PrinterProfile::ConnectionMode::LanOnly);
+    QUuid addCloudPrinter(const QString &devId, const QString &name);
     void removePrinter(const QUuid &id);
 
     QList<PrinterProfile> printers() const;
@@ -41,8 +52,11 @@ private:
     void loadPersistedPrinters();
     void persistProfile(const PrinterProfile &profile);
     void startConnection(const PrinterProfile &profile);
+    void wireAndStart(const QUuid &id, PrinterProfile::ConnectionMode mode, PrinterConnection *connection);
+    void fallBackToCloud(const QUuid &id);
 
     QHash<QUuid, PrinterProfile> m_profiles;
     QHash<QUuid, PrinterConnection *> m_connections;
     QHash<QUuid, PrinterStatus> m_statuses;
+    QSet<QUuid> m_cloudFallbackDone;
 };

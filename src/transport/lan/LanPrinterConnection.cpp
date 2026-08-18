@@ -147,22 +147,7 @@ void LanPrinterConnection::handleMessage(const QString &topic, const QByteArray 
 QString LanPrinterConnection::sendCommand(const PrinterCommand &command)
 {
     const QString sequenceId = QString::number(m_nextSequenceId++);
-
-    QByteArray payload;
-    switch (command.type) {
-    case PrinterCommand::Type::Pause:
-        payload = BambuCommandBuilder::pause(sequenceId);
-        break;
-    case PrinterCommand::Type::Resume:
-        payload = BambuCommandBuilder::resume(sequenceId);
-        break;
-    case PrinterCommand::Type::Stop:
-        payload = BambuCommandBuilder::stop(sequenceId);
-        break;
-    case PrinterCommand::Type::SkipObjects:
-        payload = BambuCommandBuilder::skipObjects(sequenceId, command.objectIds);
-        break;
-    }
+    const QByteArray payload = BambuCommandBuilder::build(sequenceId, command);
 
     m_commandTracker->track(sequenceId, kCommandTimeoutMs);
     m_mqttClient->publish(requestTopic(m_profile.serial), payload);

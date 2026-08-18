@@ -15,7 +15,12 @@ public:
     explicit MqttClient(QObject *parent = nullptr);
     ~MqttClient() override;
 
-    void connectToHost(const QString &host, quint16 port, const QString &username, const QString &password);
+    // `useSystemCaTrust`: LAN printers use self-signed certs already vetted
+    // via CertificateProbe/CertificateTrustStore, so the default (false)
+    // skips libmosquitto's own chain validation. The cloud relay uses a
+    // publicly-trusted certificate, so CloudPrinterConnection passes true to
+    // validate against the system CA bundle instead.
+    void connectToHost(const QString &host, quint16 port, const QString &username, const QString &password, bool useSystemCaTrust = false);
     void disconnectFromHost();
     void subscribe(const QString &topic);
     void publish(const QString &topic, const QByteArray &payload);

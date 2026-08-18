@@ -41,3 +41,13 @@ ecm_add_test(pendingcommandtrackertest.cpp
     TEST_NAME pendingcommandtrackertest
     LINK_LIBRARIES Qt::Test bambucompanioncore
 )
+
+ecm_add_test(cloudauthclienttest.cpp
+    TEST_NAME cloudauthclienttest
+    LINK_LIBRARIES Qt::Test bambucompanioncore
+)
+
+ecm_add_test(connectionfactorytest.cpp
+    TEST_NAME connectionfactorytest
+    LINK_LIBRARIES Qt::Test bambucompanioncore
+)

@@ -50,6 +50,21 @@ QByteArray BambuCommandBuilder::stop(const QString &sequenceId)
     return printCommand(sequenceId, QStringLiteral("stop"));
 }
 
+QByteArray BambuCommandBuilder::build(const QString &sequenceId, const PrinterCommand &command)
+{
+    switch (command.type) {
+    case PrinterCommand::Type::Pause:
+        return pause(sequenceId);
+    case PrinterCommand::Type::Resume:
+        return resume(sequenceId);
+    case PrinterCommand::Type::Stop:
+        return stop(sequenceId);
+    case PrinterCommand::Type::SkipObjects:
+        return skipObjects(sequenceId, command.objectIds);
+    }
+    return QByteArray();
+}
+
 QByteArray BambuCommandBuilder::skipObjects(const QString &sequenceId, const QList<int> &objectIds)
 {
     QJsonArray objList;

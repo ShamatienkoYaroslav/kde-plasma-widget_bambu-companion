@@ -25,10 +25,15 @@ PlasmoidItem {
 
         AddPrinterDialog {
             id: addPrinterDialog
+            onCloudLoginRequested: cloudLoginDialog.open()
         }
 
         CertificateConfirmDialog {
             id: certificateConfirmDialog
+        }
+
+        CloudLoginDialog {
+            id: cloudLoginDialog
         }
 
         Component {
