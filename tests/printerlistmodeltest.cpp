@@ -1,7 +1,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
-#include "qmlplugin/PrinterController.h"
+#include "core/PrinterRegistry.h"
 #include "qmlplugin/PrinterListModel.h"
 
 class PrinterListModelTest : public QObject
@@ -20,8 +20,7 @@ private slots:
         PrinterListModel model;
         QCOMPARE(model.rowCount(), 0);
 
-        PrinterController controller;
-        controller.addLanPrinter(QStringLiteral("Test Printer"), QStringLiteral("203.0.113.1"), QStringLiteral("TEST0001"), QStringLiteral("secret"), 8883);
+        PrinterRegistry::instance().addLanPrinter(QStringLiteral("Test Printer"), QStringLiteral("203.0.113.1"), QStringLiteral("TEST0001"), QStringLiteral("secret"), 8883);
 
         QCOMPARE(model.rowCount(), 1);
         const QModelIndex idx = model.index(0, 0);

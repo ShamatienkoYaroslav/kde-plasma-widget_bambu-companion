@@ -2,7 +2,6 @@
 
 #include <QObject>
 #include <QString>
-#include <QVariantList>
 #include <qqmlregistration.h>
 
 class CloudAccountController : public QObject
@@ -24,15 +23,11 @@ public:
     Q_INVOKABLE void submitVerificationCode(const QString &code);
     Q_INVOKABLE void logout();
     bool isLoggedIn() const;
-    Q_INVOKABLE void fetchDevices();
-    Q_INVOKABLE void addCloudPrinter(const QString &devId, const QString &name);
 
 Q_SIGNALS:
     void loginSucceeded();
     void twoFactorRequired();
     void loginFailed(const QString &reason);
     void loggedOut();
-    void devicesReady(const QVariantList &devices);
-    void fetchFailed(const QString &reason);
     void loggedInChanged();
 };

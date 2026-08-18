@@ -23,11 +23,6 @@ PlasmoidItem {
         Layout.preferredWidth: Kirigami.Units.gridUnit * 20
         Layout.preferredHeight: Kirigami.Units.gridUnit * 18
 
-        AddPrinterDialog {
-            id: addPrinterDialog
-            onCloudLoginRequested: cloudLoginDialog.open()
-        }
-
         CertificateConfirmDialog {
             id: certificateConfirmDialog
         }
@@ -49,12 +44,12 @@ PlasmoidItem {
                         text: i18n("Bambu Companion")
                     }
                     PlasmaComponents3.ToolButton {
-                        icon.name: "list-add"
-                        text: i18n("Add Printer…")
+                        icon.name: CloudAccountController.loggedIn ? "im-user-away" : "im-user"
+                        text: CloudAccountController.loggedIn ? i18n("Log out of Bambu Cloud") : i18n("Log into Bambu Cloud…")
                         display: PlasmaComponents3.ToolButton.IconOnly
                         PlasmaComponents3.ToolTip.text: text
                         PlasmaComponents3.ToolTip.visible: hovered
-                        onClicked: addPrinterDialog.open()
+                        onClicked: CloudAccountController.loggedIn ? CloudAccountController.logout() : cloudLoginDialog.open()
                     }
                 }
 
@@ -82,22 +77,29 @@ PlasmoidItem {
                     Item {
                         Layout.fillHeight: true
                     }
-                    Kirigami.Icon {
+                    Image {
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.huge
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.huge
-                        source: "printer"
-                        opacity: 0.5
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.huge * 3
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.huge * 3
+                        fillMode: Image.PreserveAspectFit
+                        source: "../images/bambulab-p1s.png"
+                        opacity: 0.6
                     }
                     PlasmaComponents3.Label {
                         Layout.alignment: Qt.AlignHCenter
-                        text: i18n("No printers added yet")
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        text: CloudAccountController.loggedIn
+                            ? i18n("No printers found on your Bambu account")
+                            : i18n("Log into Bambu Cloud to see your printers")
                         opacity: 0.7
                     }
                     PlasmaComponents3.Button {
                         Layout.alignment: Qt.AlignHCenter
-                        text: i18n("Add Printer…")
-                        onClicked: addPrinterDialog.open()
+                        visible: !CloudAccountController.loggedIn
+                        text: i18n("Log into Bambu Cloud…")
+                        onClicked: cloudLoginDialog.open()
                     }
                     Item {
                         Layout.fillHeight: true

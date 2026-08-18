@@ -10,6 +10,9 @@
 #include "PrinterProfile.h"
 #include "PrinterStatus.h"
 
+struct CloudDeviceInfo;
+class CloudDeviceDirectory;
+
 class PrinterRegistry : public QObject
 {
     Q_OBJECT
@@ -54,9 +57,12 @@ private:
     void startConnection(const PrinterProfile &profile);
     void wireAndStart(const QUuid &id, PrinterProfile::ConnectionMode mode, PrinterConnection *connection);
     void fallBackToCloud(const QUuid &id);
+    void syncCloudDevices(const QList<CloudDeviceInfo> &devices);
+    void clearAllPrinters();
 
     QHash<QUuid, PrinterProfile> m_profiles;
     QHash<QUuid, PrinterConnection *> m_connections;
     QHash<QUuid, PrinterStatus> m_statuses;
     QSet<QUuid> m_cloudFallbackDone;
+    CloudDeviceDirectory *m_cloudDeviceDirectory = nullptr;
 };

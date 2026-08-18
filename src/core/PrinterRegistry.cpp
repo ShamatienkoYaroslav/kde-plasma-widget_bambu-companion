@@ -4,6 +4,8 @@
 #include <KSharedConfig>
 
 #include "../security/SecretStore.h"
+#include "../transport/cloud/CloudAuthClient.h"
+#include "../transport/cloud/CloudDeviceDirectory.h"
 #include "../transport/cloud/CloudPrinterConnection.h"
 #include "ConnectionFactory.h"
 
@@ -31,8 +33,49 @@ PrinterRegistry &PrinterRegistry::instance()
 
 PrinterRegistry::PrinterRegistry(QObject *parent)
     : QObject(parent)
+    , m_cloudDeviceDirectory(new CloudDeviceDirectory(this))
 {
+    connect(m_cloudDeviceDirectory, &CloudDeviceDirectory::devicesReady, this, &PrinterRegistry::syncCloudDevices);
+    connect(&CloudAuthClient::instance(), &CloudAuthClient::loginSucceeded, this, [this]() {
+        m_cloudDeviceDirectory->fetchDevices();
+    });
+    connect(&CloudAuthClient::instance(), &CloudAuthClient::loggedOut, this, &PrinterRegistry::clearAllPrinters);
+
     loadPersistedPrinters();
+
+    if (CloudAuthClient::instance().isLoggedIn()) {
+        m_cloudDeviceDirectory->fetchDevices();
+    } else if (!m_profiles.isEmpty()) {
+        // The printer list is account-scoped: starting up already logged
+        // out with leftover profiles (e.g. from before this behavior
+        // existed, or a crash between logout and a fresh sync) is the same
+        // "no source of truth" situation as an explicit logout.
+        clearAllPrinters();
+    }
+}
+
+void PrinterRegistry::syncCloudDevices(const QList<CloudDeviceInfo> &devices)
+{
+    for (const CloudDeviceInfo &device : devices) {
+        bool alreadyExists = false;
+        for (auto it = m_profiles.constBegin(); it != m_profiles.constEnd(); ++it) {
+            if (it.value().serial == device.devId) {
+                alreadyExists = true;
+                break;
+            }
+        }
+        if (!alreadyExists) {
+            addCloudPrinter(device.devId, device.name);
+        }
+    }
+}
+
+void PrinterRegistry::clearAllPrinters()
+{
+    const QList<QUuid> ids = m_profiles.keys();
+    for (const QUuid &id : ids) {
+        removePrinter(id);
+    }
 }
 
 void PrinterRegistry::loadPersistedPrinters()

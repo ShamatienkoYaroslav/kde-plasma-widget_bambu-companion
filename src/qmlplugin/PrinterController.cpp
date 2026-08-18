@@ -17,11 +17,6 @@ PrinterController::PrinterController(QObject *parent)
     });
 }
 
-void PrinterController::addLanPrinter(const QString &name, const QString &host, const QString &serial, const QString &accessCode, int mqttPort)
-{
-    PrinterRegistry::instance().addLanPrinter(name, host, serial, accessCode, static_cast<quint16>(mqttPort));
-}
-
 void PrinterController::removePrinter(const QString &printerId)
 {
     PrinterRegistry::instance().removePrinter(QUuid(printerId));

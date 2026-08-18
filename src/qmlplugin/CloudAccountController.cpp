@@ -1,10 +1,6 @@
 #include "CloudAccountController.h"
 
-#include <QVariantMap>
-
-#include "../core/PrinterRegistry.h"
 #include "../transport/cloud/CloudAuthClient.h"
-#include "../transport/cloud/CloudDeviceDirectory.h"
 
 CloudAccountController::CloudAccountController(QObject *parent)
     : QObject(parent)
@@ -36,35 +32,4 @@ void CloudAccountController::logout()
 bool CloudAccountController::isLoggedIn() const
 {
     return CloudAuthClient::instance().isLoggedIn();
-}
-
-void CloudAccountController::fetchDevices()
-{
-    // A fresh directory per fetch, self-discarding once the request settles.
-    auto *directory = new CloudDeviceDirectory(this);
-
-    connect(directory, &CloudDeviceDirectory::devicesReady, this, [this, directory](const QList<CloudDeviceInfo> &devices) {
-        QVariantList list;
-        for (const CloudDeviceInfo &device : devices) {
-            QVariantMap entry;
-            entry[QStringLiteral("devId")] = device.devId;
-            entry[QStringLiteral("name")] = device.name;
-            entry[QStringLiteral("online")] = device.online;
-            list.append(entry);
-        }
-        Q_EMIT devicesReady(list);
-        directory->deleteLater();
-    });
-
-    connect(directory, &CloudDeviceDirectory::fetchFailed, this, [this, directory](const QString &reason) {
-        Q_EMIT fetchFailed(reason);
-        directory->deleteLater();
-    });
-
-    directory->fetchDevices();
-}
-
-void CloudAccountController::addCloudPrinter(const QString &devId, const QString &name)
-{
-    PrinterRegistry::instance().addCloudPrinter(devId, name);
 }
