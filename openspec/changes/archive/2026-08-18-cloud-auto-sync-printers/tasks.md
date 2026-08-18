@@ -73,4 +73,4 @@
       synced printers; log out and confirm every printer (LAN and Cloud) is
       removed, its config group and any KWallet secret deleted; log back in
       and confirm the account's current devices get re-synced.
-- [ ] 4.4 Confirm CI still passes.
+- [x] 4.4 Confirm CI still passes.

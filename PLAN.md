@@ -301,6 +301,29 @@ section for full detail.
 Archived as OpenSpec change
 [`2026-08-18-phase-3-bambu-cloud-support`](./openspec/changes/archive/2026-08-18-phase-3-bambu-cloud-support/).
 
+## Cross-cutting — Cloud-account-driven printer sync
+
+Not tied to a specific phase number: a UX pivot away from manual printer
+entry entirely. Once a Bambu Cloud account is logged in, the printer list
+is fully account-sourced — no "Add Printer" UI (neither the LAN form nor
+the Cloud device picker). `PrinterRegistry` auto-fetches and adds the
+account's devices at startup (if already logged in) and right after login;
+logging out (or starting up already logged out with leftover printers)
+clears the whole configured printer list, LAN and Cloud alike, since
+there's no account to be the source of truth for it otherwise. The empty
+state is login-state-aware (login prompt vs. "no printers on this
+account"), illustrated with Bambu Lab's own `P1S_cover.png` from their
+open-source (AGPL-3.0) BambuStudio repo — see
+`package/contents/images/NOTICE.md` for provenance.
+
+Same known gap as Phase 3 still applies: cloud-sourced printers show
+`Unknown`/`Error` status until the account uid problem is solved, since
+that blocks the cloud MQTT relay connection regardless of how the printer
+got added to the list.
+
+Archived as OpenSpec change
+[`2026-08-18-cloud-auto-sync-printers`](./openspec/changes/archive/2026-08-18-cloud-auto-sync-printers/).
+
 ## Phase 4 — Camera live view (LAN only)
 
 Goal: live JPEG stream from a printer's local camera (proprietary framed-JPEG
